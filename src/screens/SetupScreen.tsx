@@ -215,7 +215,6 @@ export const SetupScreen = () => {
                     </TouchableOpacity>
                   )}
                 </View>
-
                 <Text
                   style={[
                     styles.modeDescription,
@@ -226,6 +225,18 @@ export const SetupScreen = () => {
                   ]}
                 >
                   Ogni giocatore fa un solo dibattito.
+                </Text>
+                <Text
+                  style={[
+                    styles.modeDescription,
+                    { color: themeColors.subtext },
+                    settings.gameMode === "quick" && {
+                      color: "rgba(255,255,255,0.8)",
+                    },
+                  ]}
+                >
+                  {" "}
+                  (Minimo 4 giocatori)
                 </Text>
               </AppTouchable>
             </View>
@@ -314,6 +325,7 @@ export const SetupScreen = () => {
             title="INIZIA PARTITA"
             onPress={handleStartGame}
             disabled={players.length < 3}
+            variant="primary"
           />
 
           {players.length >= 3 && (

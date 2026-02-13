@@ -6,7 +6,6 @@ import {
   Text,
   TextInputProps,
 } from "react-native";
-import { Colors } from "../constants/Colors";
 import { useThemeColors } from "../hooks/useThemeColors";
 
 interface AppTextInputProps extends TextInputProps {
@@ -45,7 +44,6 @@ export const AppTextInput: React.FC<AppTextInputProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginVertical: 8,
-    width: "100%",
   },
   label: {
     marginBottom: 6,

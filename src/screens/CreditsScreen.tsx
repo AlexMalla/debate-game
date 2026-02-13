@@ -1,10 +1,11 @@
 import React from "react";
-import { Text, StyleSheet, View } from "react-native";
+import { Text, StyleSheet, View, TouchableOpacity } from "react-native";
 import { ScreenLayout } from "../components/ScreenLayout";
 import { Colors } from "../constants/Colors";
 import { AppButton } from "../components/AppButton";
 import { useNavigation } from "@react-navigation/native";
 import { useThemeColors } from "../hooks/useThemeColors";
+import { Ionicons } from "@expo/vector-icons";
 
 export const CreditsScreen = () => {
   const navigation = useNavigation();
@@ -12,30 +13,35 @@ export const CreditsScreen = () => {
 
   return (
     <ScreenLayout style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Crediti</Text>
+      {/* ───────── HEADER ───────── */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
 
-        <View style={[styles.card, { backgroundColor: themeColors.card }]}>
-          <Text style={[styles.role, { color: themeColors.subtext }]}>Sviluppato da</Text>
-          <Text style={[styles.name, { color: themeColors.text }]}>Alex Mallamaci</Text>
-          <Text style={[styles.subrole, { color: themeColors.subtext }]}>(Malla)</Text>
-        </View>
+        <Text style={[styles.headerTitle, { color: Colors.primary }]}>
+          Crediti
+        </Text>
 
-        {/*      <View style={styles.card}>
-          <Text style={styles.role}>Tecnologie</Text>
-          <Text style={styles.tech}>React Native</Text>
-          <Text style={styles.tech}>Expo</Text>
-          <Text style={styles.tech}>TypeScript</Text>
-          <Text style={styles.tech}>Zustand</Text>
-          <Text style={styles.tech}>React Navigation</Text>
-        </View> */}
+        <View style={styles.headerSpacer} />
       </View>
 
-      <AppButton
-        title="Torna Indietro"
-        onPress={() => navigation.goBack()}
-        variant="outline"
-      />
+      <View style={styles.content}>
+        <View style={[styles.card, { backgroundColor: themeColors.card }]}>
+          <Text style={[styles.role, { color: themeColors.subtext }]}>
+            Sviluppato da
+          </Text>
+          <Text style={[styles.name, { color: themeColors.text }]}>
+            Alex Mallamaci
+          </Text>
+          <Text style={[styles.subrole, { color: themeColors.subtext }]}>
+            (Malla)
+          </Text>
+        </View>
+      </View>
     </ScreenLayout>
   );
 };
@@ -45,16 +51,29 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingBottom: 40,
   },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingBottom: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  headerSpacer: {
+    width: 40,
+  },
   content: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: Colors.primary,
-    marginBottom: 40,
   },
   card: {
     width: "100%",
@@ -82,10 +101,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 5,
     fontStyle: "italic",
-  },
-  tech: {
-    fontSize: 18,
-    fontWeight: "500",
-    marginVertical: 4,
   },
 });

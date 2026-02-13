@@ -16,7 +16,7 @@ import { useGameStore } from "../store/useGameStore";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { Ionicons } from "@expo/vector-icons";
 import { Colors } from "../constants/Colors";
-import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import { AppTouchable } from "../components/AppTouachable";
 
 export const PlayersScreen = () => {
   const navigation = useNavigation();
@@ -36,15 +36,6 @@ export const PlayersScreen = () => {
     addPlayer(name);
     setPlayerName("");
   };
-
-  const renderRightActions = (id: string) => (
-    <TouchableOpacity
-      style={styles.deleteAction}
-      onPress={() => removePlayer(id)}
-    >
-      <Ionicons name="trash-outline" size={22} color={Colors.white} />
-    </TouchableOpacity>
-  );
 
   return (
     <ScreenLayout>
@@ -69,52 +60,67 @@ export const PlayersScreen = () => {
         style={{ flex: 1 }}
       >
         <ScrollView showsVerticalScrollIndicator={false}>
-          {/* ───────── INPUT ───────── */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Aggiungi giocatore
-            </Text>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              <View style={{ flex: 1 }}>
+                <AppTextInput
+                  placeholder="Aggiungi giocatore"
+                  value={playerName}
+                  onChangeText={setPlayerName}
+                  onSubmitEditing={handleAddPlayer}
+                  maxLength={25}
+                  style={{ width: "100%" }}
+                />
+              </View>
 
-            <View style={styles.inputContainer}>
-              <AppTextInput
-                placeholder="Nome giocatore"
-                value={playerName}
-                onChangeText={setPlayerName}
-                onSubmitEditing={handleAddPlayer}
-                maxLength={25}
-                style={{ flex: 1 }}
-              />
+              <AppTouchable
+                onPress={handleAddPlayer}
+                style={{
+                  backgroundColor: Colors.primary,
+                  borderRadius: 10,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  flexShrink: 0,
+                }}
+                disabled={!playerName.trim()}
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </AppTouchable>
             </View>
           </View>
 
           {/* ───────── LISTA ───────── */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Giocatori ({players.length})
-            </Text>
-
             {players.length === 0 ? (
-              <Text style={[styles.emptyText, { color: themeColors.subtext }]}>
-                Nessun giocatore aggiunto
-              </Text>
+              <View style={styles.emptyState}>
+                <Ionicons
+                  name="people-outline"
+                  size={48}
+                  color={themeColors.subtext}
+                />
+                <Text style={[styles.emptyTitle, { color: themeColors.text }]}>
+                  Nessun giocatore aggiunto
+                </Text>
+              </View>
             ) : (
               <View style={{ gap: 10 }}>
                 {players.map((player) => (
-                  <ReanimatedSwipeable
+                  <View
                     key={player.id}
-                    renderRightActions={() => renderRightActions(player.id)}
-                    rightThreshold={80}
-                    overshootRight={false}
-                    onSwipeableOpen={(direction) => {
-                      if (direction === "right") {
-                        removePlayer(player.id);
-                      }
+                    style={{
+                      flexDirection: "row",
+                      gap: 10,
                     }}
                   >
                     <View
                       style={[
                         styles.playerCard,
-                        { backgroundColor: themeColors.card },
+                        {
+                          backgroundColor: themeColors.card,
+                          flex: 1,
+                        },
                       ]}
                     >
                       <Text
@@ -127,7 +133,20 @@ export const PlayersScreen = () => {
                         {player.name}
                       </Text>
                     </View>
-                  </ReanimatedSwipeable>
+
+                    <AppTouchable
+                      onPress={() => removePlayer(player.id)}
+                      style={{
+                        backgroundColor: Colors.danger,
+                        borderRadius: 10,
+                        borderColor: "transparent",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#fff" />
+                    </AppTouchable>
+                  </View>
                 ))}
               </View>
             )}
@@ -171,25 +190,34 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   playerCard: {
-    paddingVertical: 14,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 10,
     shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 6,
     elevation: 2,
   },
-  deleteAction: {
-    backgroundColor: Colors.danger,
-    justifyContent: "center",
-    alignItems: "center",
-    width: 70,
-    borderRadius: 14,
-    marginLeft: 10,
-  },
   emptyText: {
     textAlign: "center",
     paddingVertical: 20,
     fontStyle: "italic",
+  },
+  emptyState: {
+    alignItems: "center",
+    marginTop: 40,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    textAlign: "center",
+    paddingHorizontal: 24,
   },
 });

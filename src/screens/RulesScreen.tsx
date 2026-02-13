@@ -1,10 +1,16 @@
 import React from "react";
-import { Text, StyleSheet, ScrollView, View } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
 import { ScreenLayout } from "../components/ScreenLayout";
 import { Colors } from "../constants/Colors";
-import { AppButton } from "../components/AppButton";
 import { useNavigation } from "@react-navigation/native";
 import { useThemeColors } from "../hooks/useThemeColors";
+import { Ionicons } from "@expo/vector-icons";
 
 export const RulesScreen = () => {
   const navigation = useNavigation();
@@ -12,22 +18,47 @@ export const RulesScreen = () => {
 
   return (
     <ScreenLayout>
+      {/* ───────── HEADER ───────── */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
+          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+
+        <Text style={[styles.headerTitle, { color: Colors.primary }]}>
+          Regole
+        </Text>
+
+        <View style={styles.headerSpacer} />
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Regole del gioco</Text>
-
+        {/* ───────── SETUP ───────── */}
         <View style={[styles.section, { backgroundColor: themeColors.card }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
             1. Setup
           </Text>
           <Text style={[styles.text, { color: themeColors.text }]}>
-            Inserisci i nomi dei giocatori (minimo 3). Scegliete il punteggio
-            per vincere (3, 5 o 10 punti).
+            Inserisci i nomi dei giocatori (minimo 3). Scegli la modalità di
+            gioco:
+          </Text>
+          <Text style={[styles.text, { color: themeColors.text }]}>
+            • <Text style={styles.bold}>Tutti contro tutti:</Text> ogni
+            giocatore sfida tutti gli altri.
+          </Text>
+          <Text style={[styles.text, { color: themeColors.text }]}>
+            {" "}
+            • <Text style={styles.bold}>Modalità rapida:</Text> ogni giocatore
+            fa un solo dibattito (minimo 4 giocatori).
           </Text>
         </View>
 
+        {/* ───────── IL TURNO ───────── */}
         <View style={[styles.section, { backgroundColor: themeColors.card }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
             2. Il Turno
@@ -36,16 +67,17 @@ export const RulesScreen = () => {
             In ogni turno vengono scelti casualmente un{" "}
             <Text style={styles.bold}>Difensore</Text> e un{" "}
             <Text style={styles.bold}>Oppositore</Text>. Viene mostrata una tesi
-            casuale (es. "L'ananas sulla pizza è buono").
+            casuale su cui discutere.
           </Text>
         </View>
 
+        {/* ───────── IL DIBATTITO ───────── */}
         <View style={[styles.section, { backgroundColor: themeColors.card }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-            3. Il Dibattito
+            3. Dibattito
           </Text>
           <Text style={[styles.text, { color: themeColors.text }]}>
-            Il dibattito è diviso in 3 fasi da 1 minuto ciascuna:
+            Ogni dibattito è diviso in 3 fasi:
           </Text>
           <View style={styles.list}>
             <Text style={[styles.listItem, { color: themeColors.text }]}>
@@ -57,54 +89,61 @@ export const RulesScreen = () => {
               contro la tesi.
             </Text>
             <Text style={[styles.listItem, { color: themeColors.text }]}>
-              • <Text style={styles.bold}>Discussione:</Text> Dibattito libero
-              tra i due.
+              • <Text style={styles.bold}>Discussion finale:</Text> Dibattito
+              libero tra i due.
             </Text>
           </View>
         </View>
 
+        {/* ───────── VOTAZIONE ───────── */}
         <View style={[styles.section, { backgroundColor: themeColors.card }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
             4. Votazione
           </Text>
           <Text style={[styles.text, { color: themeColors.text }]}>
-            Al termine del tempo, i giocatori che non hanno partecipato al
-            dibattito diventano <Text style={styles.bold}>Giudici</Text> e
-            votano chi è stato più convincente.
+            I giocatori non coinvolti diventano{" "}
+            <Text style={styles.bold}>Giudici</Text> e votano chi è stato più
+            convincente.
           </Text>
         </View>
 
+        {/* ───────── VITTORIA ───────── */}
         <View style={[styles.section, { backgroundColor: themeColors.card }]}>
           <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
             5. Vittoria
           </Text>
           <Text style={[styles.text, { color: themeColors.text }]}>
-            Ogni voto vale 1 punto. Il primo giocatore che raggiunge il
-            punteggio prefissato vince la partita!
+            Ogni voto vale 1 punto. Al termine della partita, il giocatore con
+            il punteggio più alto vince.
           </Text>
         </View>
-
-        <AppButton
-          title="Torna Indietro"
-          onPress={() => navigation.goBack()}
-          variant="outline"
-          style={styles.button}
-        />
       </ScrollView>
     </ScreenLayout>
   );
 };
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingBottom: 10,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  headerSpacer: {
+    width: 40,
+  },
   scrollContent: {
     paddingBottom: 40,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: Colors.primary,
-    marginBottom: 20,
-    textAlign: "center",
   },
   section: {
     marginBottom: 25,
@@ -136,8 +175,5 @@ const styles = StyleSheet.create({
   listItem: {
     fontSize: 16,
     lineHeight: 24,
-  },
-  button: {
-    marginTop: 20,
   },
 });
