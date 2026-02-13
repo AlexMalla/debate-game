@@ -3,178 +3,350 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GamePhase, GameSettings, Player, RoundData } from "../types";
 import { THESES } from "../constants/Theses";
+import { shuffleAvoidingBackToBack } from "../utils/functions";
+
+interface SessionPlayer extends Player {
+  participationCount: number;
+}
 
 interface GameState {
-  // Persistent Settings
   settings: GameSettings;
-  setWinningScore: (score: 3 | 5 | 10) => void;
+  setGameMode: (mode: "quick" | "all_vs_all") => void;
   toggleSound: () => void;
   toggleTheme: () => void;
+  toggleFinalDiscussion: () => void;
+  setRoundDuration: (duration: 30 | 60 | 120) => void;
+  estimateGameDuration: () => number;
+  estimateGameDurationFormatted: () => string;
+  players: SessionPlayer[];
+  activeDebaterIds: string[];
 
-  // Session State
-  players: Player[];
   phase: GamePhase;
   roundNumber: number;
   roundData: RoundData | null;
-  winnerId: string | null;
+  winnerIds: string[] | null;
+  totalRounds: number;
 
-  // Actions
+  matchupQueue: { defenderId: string; opponentId: string }[];
+  lastMatchPlayerIds: string[] | null;
+
   addPlayer: (name: string) => void;
   removePlayer: (id: string) => void;
   resetGame: () => void;
   startGame: () => void;
   startRound: () => void;
-  nextPhase: () => void; // Transitions timer phases
-  submitVotes: (votes: Record<string, string>) => void; // voterId -> votedPlayerId
+  nextPhase: () => void;
+  submitVotes: (votes: Record<string, string>) => void;
   endGame: () => void;
 }
 
-// Helper to get random item
 const getRandom = <T>(arr: T[]): T =>
   arr[Math.floor(Math.random() * arr.length)];
+
+const shuffle = <T>(arr: T[]) => arr.slice().sort(() => Math.random() - 0.5);
 
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
+      // ───────── SETTINGS ─────────
       settings: {
-        winningScore: 5,
+        gameMode: "all_vs_all",
         isSoundEnabled: true,
         isDarkMode: false,
+        removeFinalDiscussion: false,
+        roundDuration: 60,
       },
-      players: [],
-      phase: "SETUP",
-      roundNumber: 0,
-      roundData: null,
-      winnerId: null,
 
-      setWinningScore: (score) =>
-        set((state) => ({
-          settings: { ...state.settings, winningScore: score },
-        })),
+      setGameMode: (mode) =>
+        set((s) => ({ settings: { ...s.settings, gameMode: mode } })),
 
       toggleSound: () =>
-        set((state) => ({
+        set((s) => ({
           settings: {
-            ...state.settings,
-            isSoundEnabled: !state.settings.isSoundEnabled,
+            ...s.settings,
+            isSoundEnabled: !s.settings.isSoundEnabled,
           },
         })),
 
       toggleTheme: () =>
-        set((state) => ({
+        set((s) => ({
           settings: {
-            ...state.settings,
-            isDarkMode: !state.settings.isDarkMode,
+            ...s.settings,
+            isDarkMode: !s.settings.isDarkMode,
           },
         })),
 
+      toggleFinalDiscussion: () =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            removeFinalDiscussion: !s.settings.removeFinalDiscussion,
+          },
+        })),
+
+      setRoundDuration: (duration) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            roundDuration: duration,
+          },
+        })),
+
+      // ───────── SESSION ─────────
+      players: [],
+      activeDebaterIds: [],
+
+      phase: "SETUP",
+      roundNumber: 0,
+      roundData: null,
+      winnerIds: null,
+      totalRounds: 0,
+
+      matchupQueue: [],
+      lastMatchPlayerIds: null,
+
+      // ───────── ACTIONS ─────────
       addPlayer: (name) =>
-        set((state) => ({
+        set((s) => ({
           players: [
-            ...state.players,
-            { id: Date.now().toString() + Math.random(), name, score: 0 },
+            ...s.players,
+            {
+              id: Date.now().toString() + Math.random(),
+              name,
+              score: 0,
+              participationCount: 0,
+            },
           ],
         })),
 
       removePlayer: (id) =>
-        set((state) => ({
-          players: state.players.filter((p) => p.id !== id),
+        set((s) => ({
+          players: s.players.filter((p) => p.id !== id),
         })),
 
       resetGame: () =>
-        set({
+        set((state) => ({
+          settings: {
+            ...state.settings,
+            gameMode: "quick",
+          },
           players: [],
+          activeDebaterIds: [],
           phase: "SETUP",
           roundNumber: 0,
           roundData: null,
-          winnerId: null,
-        }),
+          winnerIds: null,
+          totalRounds: 0,
+          matchupQueue: [],
+          lastMatchPlayerIds: null,
+        })),
 
+      // ───────── START GAME ─────────
       startGame: () => {
-        const { players } = get();
+        const { players, settings } = get();
         if (players.length < 3) return;
 
-        // Reset scores
-        const resetPlayers = players.map((p) => ({ ...p, score: 0 }));
+        const resetPlayers = players.map((p) => ({
+          ...p,
+          score: 0,
+          participationCount: 0,
+        }));
+
+        const activeDebaterIds = resetPlayers.map((p) => p.id);
+
+        const debaterPool = resetPlayers.filter((p) =>
+          activeDebaterIds.includes(p.id),
+        );
+
+        let matchupQueue: { defenderId: string; opponentId: string }[] = [];
+        let totalRounds = 0;
+
+        if (settings.gameMode === "quick") {
+          totalRounds = Math.ceil(debaterPool.length / 2);
+        } else {
+          for (let i = 0; i < debaterPool.length; i++) {
+            for (let j = i + 1; j < debaterPool.length; j++) {
+              matchupQueue.push({
+                defenderId: debaterPool[i].id,
+                opponentId: debaterPool[j].id,
+              });
+            }
+          }
+          matchupQueue = shuffleAvoidingBackToBack(matchupQueue);
+          totalRounds = matchupQueue.length;
+        }
 
         set({
           players: resetPlayers,
-          phase: "DEFENSE", // Will be set by startRound actually
+          activeDebaterIds,
+          phase: "ROUND_INTRO",
           roundNumber: 0,
-          winnerId: null,
+          winnerIds: null,
+          totalRounds,
+          matchupQueue,
+          lastMatchPlayerIds: null,
         });
 
         get().startRound();
       },
 
+      // ───────── START ROUND ─────────
       startRound: () => {
-        const { players, settings, roundNumber } = get();
+        const {
+          players,
+          activeDebaterIds,
+          roundNumber,
+          totalRounds,
+          settings,
+          matchupQueue,
+          lastMatchPlayerIds,
+        } = get();
 
-        // Check for winner first
-        const winner = players.find((p) => p.score >= settings.winningScore);
-        if (winner) {
-          set({ phase: "GAME_OVER", winnerId: winner.id });
+        if (totalRounds > 0 && roundNumber >= totalRounds) {
+          get().endGame();
           return;
         }
 
-        // Select Defender and Opponent
-        // Simple random logic for now, ensuring unique
-        let defender = getRandom(players);
-        let opponent = getRandom(players);
+        let defender: SessionPlayer;
+        let opponent: SessionPlayer;
+        let newMatchupQueue = [...matchupQueue];
 
-        while (opponent.id === defender.id) {
-          opponent = getRandom(players);
+        if (settings.gameMode === "all_vs_all") {
+          const next = newMatchupQueue.shift();
+          if (!next) {
+            get().endGame();
+            return;
+          }
+
+          defender = players.find((p) => p.id === next.defenderId)!;
+          opponent = players.find((p) => p.id === next.opponentId)!;
+        } else {
+          const debaterPool = players.filter((p) =>
+            activeDebaterIds.includes(p.id),
+          );
+
+          let selectable = debaterPool;
+
+          if (lastMatchPlayerIds && debaterPool.length > 2) {
+            selectable = debaterPool.filter(
+              (p) => !lastMatchPlayerIds.includes(p.id),
+            );
+
+            if (selectable.length < 2) {
+              selectable = debaterPool;
+            }
+          }
+
+          const shuffled = shuffle(selectable);
+          defender = shuffled[0];
+          opponent = shuffled[1];
         }
 
         const judgeIds = players
           .filter((p) => p.id !== defender.id && p.id !== opponent.id)
           .map((p) => p.id);
 
-        const thesis = getRandom(THESES);
-
-        set({
-          phase: "DEFENSE",
-          roundNumber: roundNumber + 1,
+        set((state) => ({
+          phase: "ROUND_INTRO",
+          roundNumber: state.roundNumber + 1,
           roundData: {
             defenderId: defender.id,
             opponentId: opponent.id,
-            thesis,
+            thesis: getRandom(THESES),
             judgeIds,
           },
-        });
+          matchupQueue: newMatchupQueue,
+          lastMatchPlayerIds: [defender.id, opponent.id],
+          players: state.players.map((p) =>
+            p.id === defender.id || p.id === opponent.id
+              ? { ...p, participationCount: p.participationCount + 1 }
+              : p,
+          ),
+        }));
       },
 
+      // ───────── FLOW ─────────
       nextPhase: () => {
-        const { phase } = get();
-        if (phase === "DEFENSE") set({ phase: "OFFENSE" });
-        else if (phase === "OFFENSE") set({ phase: "DISCUSSION" });
-        else if (phase === "DISCUSSION") set({ phase: "VOTING" });
+        const { phase, settings } = get();
+
+        if (phase === "ROUND_INTRO") set({ phase: "DEFENSE" });
+        else if (phase === "DEFENSE") set({ phase: "OFFENSE" });
+        else if (phase === "OFFENSE") {
+          if (!settings.removeFinalDiscussion) set({ phase: "DISCUSSION" });
+          else set({ phase: "VOTING" });
+        } else if (phase === "DISCUSSION") {
+          set({ phase: "VOTING" });
+        }
       },
 
+      // ───────── VOTING ─────────
       submitVotes: (votes) => {
         const { players, roundData } = get();
         if (!roundData) return;
 
-        const newPlayers = [...players];
+        const updated = players.map((p) => ({ ...p }));
 
-        Object.values(votes).forEach((votedId) => {
-          const playerIndex = newPlayers.findIndex((p) => p.id === votedId);
-          if (playerIndex !== -1) {
-            newPlayers[playerIndex].score += 1;
-          }
+        Object.values(votes).forEach((id) => {
+          const target = updated.find((p) => p.id === id);
+          if (target) target.score += 1;
         });
 
-        set({ players: newPlayers, phase: "ROUND_END" });
+        set({ players: updated, phase: "ROUND_END" });
       },
 
       endGame: () => {
-        set({ phase: "SETUP" });
+        const { players } = get();
+        const maxScore = Math.max(...players.map((p) => p.score));
+        const winners = players
+          .filter((p) => p.score === maxScore)
+          .map((p) => p.id);
+
+        set({ phase: "GAME_OVER", winnerIds: winners });
+      },
+
+      // ───────── GAME DURATION ESTIMATION ─────────
+      estimateGameDuration: () => {
+        const { players, settings, totalRounds } = get();
+        const playerCount = players.length;
+
+        if (playerCount < 3) return 0;
+
+        let estimatedRounds = totalRounds;
+        if (estimatedRounds === 0) {
+          if (settings.gameMode === "quick") {
+            estimatedRounds = Math.ceil(playerCount / 2);
+          } else {
+            estimatedRounds = (playerCount * (playerCount - 1)) / 2; // all vs all
+          }
+        }
+
+        const roundBaseTime = settings.roundDuration * 2; // durata round tesi + antitesi
+        const discussionTime = settings.removeFinalDiscussion
+          ? 0
+          : settings.roundDuration; // discussione finale
+        const judgeTime = 10; // 10s per giudice
+        const averageJudges = Math.max(playerCount - 2, 0);
+
+        const singleRoundTime =
+          roundBaseTime + discussionTime + judgeTime * averageJudges;
+
+        return singleRoundTime * estimatedRounds; // in secondi
+      },
+
+      estimateGameDurationFormatted: () => {
+        const totalTime = get().estimateGameDuration();
+        const minutes = Math.floor(totalTime / 60);
+        const seconds = totalTime % 60;
+
+        if (minutes > 0 && seconds > 0) return `${minutes} min ${seconds} s`;
+        if (minutes > 0) return `${minutes} min`;
+        return `${seconds} s`;
       },
     }),
     {
       name: "dibattito-storage",
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ settings: state.settings }), // Only persist settings
+      partialize: (s) => ({ settings: s.settings }),
     },
   ),
 );

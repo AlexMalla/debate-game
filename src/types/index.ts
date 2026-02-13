@@ -4,12 +4,24 @@ export interface Player {
   score: number;
 }
 
-export type GamePhase = 'SETUP' | 'DEFENSE' | 'OFFENSE' | 'DISCUSSION' | 'VOTING' | 'ROUND_END' | 'GAME_OVER';
+export type GamePhase =
+  | "SETUP"
+  | "ROUND_INTRO"
+  | "DEFENSE"
+  | "OFFENSE"
+  | "DISCUSSION"
+  | "VOTING"
+  | "ROUND_END"
+  | "GAME_OVER";
+
+export type GameMode = "all_vs_all" | "quick";
 
 export interface GameSettings {
-  winningScore: 3 | 5 | 10;
+  gameMode: "quick" | "all_vs_all";
   isSoundEnabled: boolean;
   isDarkMode: boolean;
+  removeFinalDiscussion: boolean;
+  roundDuration: number;
 }
 
 export interface RoundData {
@@ -19,4 +31,4 @@ export interface RoundData {
   judgeIds: string[];
 }
 
-export type TimerStatus = 'RUNNING' | 'PAUSED' | 'STOPPED';
+export type TimerStatus = "RUNNING" | "PAUSED" | "STOPPED";

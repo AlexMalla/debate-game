@@ -8,6 +8,7 @@ import {
   Alert,
   TouchableOpacity,
   Modal,
+  Button,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { ScreenLayout } from "../components/ScreenLayout";
@@ -17,6 +18,7 @@ import { useThemeColors } from "../hooks/useThemeColors";
 import { useGameStore } from "../store/useGameStore";
 import { GamePhase } from "../types";
 import { Ionicons } from "@expo/vector-icons";
+import { useSound } from "../hooks/useSound";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 type RootStackParamList = {
@@ -26,11 +28,10 @@ type RootStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-const PHASE_DURATION = 60; // seconds
-
 export const GameScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const themeColors = useThemeColors();
+  const { play } = useSound();
   const {
     phase,
     roundData,
@@ -38,31 +39,35 @@ export const GameScreen = () => {
     nextPhase,
     submitVotes,
     startRound,
-    winnerId,
+    winnerIds,
     roundNumber,
+    settings,
   } = useGameStore();
 
-  const [timeLeft, setTimeLeft] = useState(PHASE_DURATION);
+  const [timeLeft, setTimeLeft] = useState(settings.roundDuration);
   const [timerStatus, setTimerStatus] = useState<
     "IDLE" | "RUNNING" | "PAUSED" | "FINISHED"
   >("IDLE");
   const [votes, setVotes] = useState<Record<string, string>>({}); // judgeId -> winnerId
   const [isLeaderboardVisible, setLeaderboardVisible] = useState(false);
 
+  const minutes = Math.floor(timeLeft / 60);
+  const seconds = (timeLeft % 60).toString().padStart(2, "0");
+
   // Animation for timer
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   // Effect to handle navigation to Victory
   useEffect(() => {
-    if (phase === "GAME_OVER" || winnerId) {
+    if (phase === "GAME_OVER") {
       navigation.replace("Victory");
     }
-  }, [phase, winnerId]);
+  }, [phase]);
 
   // Reset timer on phase change
   useEffect(() => {
     if (["DEFENSE", "OFFENSE", "DISCUSSION"].includes(phase)) {
-      setTimeLeft(PHASE_DURATION);
+      setTimeLeft(settings.roundDuration);
       setTimerStatus("IDLE");
     }
   }, [phase]);
@@ -77,6 +82,7 @@ export const GameScreen = () => {
           if (prev <= 1) {
             clearInterval(interval);
             setTimerStatus("FINISHED");
+            play("end");
             return 0;
           }
           return prev - 1;
@@ -85,13 +91,15 @@ export const GameScreen = () => {
     }
 
     return () => clearInterval(interval);
-  }, [timerStatus]);
+  }, [timerStatus, play]);
 
   const toggleTimer = () => {
     if (timerStatus === "IDLE" || timerStatus === "PAUSED") {
       setTimerStatus("RUNNING");
+      play("start");
     } else if (timerStatus === "RUNNING") {
       setTimerStatus("PAUSED");
+      play("pause");
     }
   };
 
@@ -101,6 +109,7 @@ export const GameScreen = () => {
 
   const handleVote = (judgeId: string, votedId: string) => {
     setVotes((prev) => ({ ...prev, [judgeId]: votedId }));
+    play("vote");
   };
 
   const confirmVotes = () => {
@@ -111,6 +120,7 @@ export const GameScreen = () => {
     }
     submitVotes(votes);
     setVotes({});
+    play("click");
   };
 
   const toggleLeaderboard = () => {
@@ -119,9 +129,16 @@ export const GameScreen = () => {
         setTimerStatus("PAUSED");
       }
       setLeaderboardVisible(true);
+      play("click");
     } else {
       setLeaderboardVisible(false);
+      play("click");
     }
+  };
+
+  const handleNextPhase = () => {
+    play("next");
+    nextPhase();
   };
 
   const handleExitGame = () => {
@@ -151,6 +168,30 @@ export const GameScreen = () => {
 
   const renderPhaseContent = () => {
     switch (phase) {
+      case "ROUND_INTRO":
+        return (
+          <View style={styles.phaseContainer}>
+            <Text style={styles.phaseTitle}>{`Turno ${roundNumber}`}</Text>
+            <View style={styles.versusContainer}>
+              <Text style={[styles.activePlayer, { color: themeColors.text }]}>
+                {defenderName}
+              </Text>
+              <Text style={styles.versus}>VS</Text>
+              <Text style={[styles.activePlayer, { color: themeColors.text }]}>
+                {opponentName}
+              </Text>
+            </View>
+
+            <View style={styles.timerControls}>
+              <AppButton
+                title={"AVVIA"}
+                onPress={handleNextPhase}
+                variant={"primary"}
+                style={styles.controlButton}
+              />
+            </View>
+          </View>
+        );
       case "DEFENSE":
         return (
           <View style={styles.phaseContainer}>
@@ -178,7 +219,7 @@ export const GameScreen = () => {
       case "DISCUSSION":
         return (
           <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>Discussione libera</Text>
+            <Text style={styles.phaseTitle}>Discussione finale</Text>
             <View style={styles.versusContainer}>
               <Text style={[styles.activePlayer, { color: themeColors.text }]}>
                 {defenderName}
@@ -198,7 +239,10 @@ export const GameScreen = () => {
               Giudici, chi vi ha convinto?
             </Text>
 
-            <ScrollView style={styles.judgesList}>
+            <ScrollView
+              style={styles.judgesList}
+              showsVerticalScrollIndicator={false}
+            >
               {roundData.judgeIds.map((judgeId) => (
                 <View
                   key={judgeId}
@@ -293,29 +337,42 @@ export const GameScreen = () => {
         </TouchableOpacity>
         {/*     <Text style={styles.headerTitle}>Dibattito in corso</Text> */}
         <View style={styles.roundInfo}>
-          {phase !== "ROUND_END" && phase !== "VOTING" && (
-            <TouchableOpacity onPress={nextPhase} style={styles.skipButton}>
-              <Text style={[styles.skipText, { color: themeColors.subtext }]}>
-                Salta
-              </Text>
-              <Ionicons
-                name="play-forward"
-                size={16}
-                color={themeColors.subtext}
-              />
-            </TouchableOpacity>
-          )}
+          {phase !== "ROUND_END" &&
+            phase !== "VOTING" &&
+            phase !== "ROUND_INTRO" && (
+              <TouchableOpacity
+                onPress={() => {
+                  play("next");
+                  nextPhase();
+                }}
+                style={styles.skipButton}
+              >
+                <Text style={[styles.skipText, { color: themeColors.subtext }]}>
+                  Salta
+                </Text>
+                <Ionicons
+                  name="play-forward"
+                  size={16}
+                  color={themeColors.subtext}
+                />
+              </TouchableOpacity>
+            )}
         </View>
       </View>
 
-      <View
-        style={[styles.thesisContainer, { backgroundColor: themeColors.card }]}
-      >
-        <Text style={styles.thesisLabel}>TESI:</Text>
-        <Text style={[styles.thesisText, { color: themeColors.text }]}>
-          {roundData.thesis}
-        </Text>
-      </View>
+      {phase !== "ROUND_INTRO" && (
+        <View
+          style={[
+            styles.thesisContainer,
+            { backgroundColor: themeColors.card },
+          ]}
+        >
+          <Text style={styles.thesisLabel}>TESI:</Text>
+          <Text style={[styles.thesisText, { color: themeColors.text }]}>
+            {roundData.thesis}
+          </Text>
+        </View>
+      )}
 
       {isTimerPhase && (
         <View style={styles.timerContainer}>
@@ -326,15 +383,14 @@ export const GameScreen = () => {
               timeLeft <= 10 && styles.timerUrgent,
             ]}
           >
-            {Math.floor(timeLeft / 60)}:
-            {(timeLeft % 60).toString().padStart(2, "0")}
+            {timeLeft > 0 ? `${minutes}:${seconds}` : "Tempo scaduto!"}
           </Text>
 
           <View style={styles.timerControls}>
             {timerStatus === "FINISHED" ? (
               <AppButton
                 title="PROSSIMA FASE"
-                onPress={nextPhase}
+                onPress={handleNextPhase}
                 style={styles.controlButton}
               />
             ) : (
@@ -388,7 +444,10 @@ export const GameScreen = () => {
             <Text style={[styles.modalTitle, { color: themeColors.text }]}>
               Classifica
             </Text>
-            <ScrollView style={styles.modalList}>
+            <ScrollView
+              style={styles.modalList}
+              showsVerticalScrollIndicator={false}
+            >
               {players
                 .sort((a, b) => b.score - a.score)
                 .map((p, index) => (
@@ -481,6 +540,14 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: "900",
     fontVariant: ["tabular-nums"],
+    textAlign: "center",
+  },
+  introCount: {
+    fontSize: 72,
+    fontWeight: "900",
+    textAlign: "center",
+    color: Colors.primary,
+    marginTop: 20,
   },
   timerControls: {
     flexDirection: "row",
@@ -520,7 +587,7 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   versusContainer: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     gap: 15,
     marginTop: 20,
@@ -631,5 +698,8 @@ const styles = StyleSheet.create({
   footerButtonText: {
     color: Colors.white,
     fontWeight: "bold",
+  },
+  startButtonContainer: {
+    marginTop: 20,
   },
 });
