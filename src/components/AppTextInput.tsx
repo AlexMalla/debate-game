@@ -1,12 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   TextInput,
   StyleSheet,
   View,
   Text,
   TextInputProps,
+  Animated,
 } from "react-native";
 import { useThemeColors } from "../hooks/useThemeColors";
+import { Colors, Spacing, Typography } from "../constants/Colors";
 
 interface AppTextInputProps extends TextInputProps {
   label?: string;
@@ -15,46 +17,78 @@ interface AppTextInputProps extends TextInputProps {
 export const AppTextInput: React.FC<AppTextInputProps> = ({
   label,
   style,
+  onFocus,
+  onBlur,
   ...props
 }) => {
   const themeColors = useThemeColors();
+  const [isFocused, setIsFocused] = useState(false);
+
+  const handleFocus = (e: any) => {
+    setIsFocused(true);
+    onFocus?.(e);
+  };
+
+  const handleBlur = (e: any) => {
+    setIsFocused(false);
+    onBlur?.(e);
+  };
 
   return (
     <View style={styles.container}>
       {label && (
-        <Text style={[styles.label, { color: themeColors.text }]}>{label}</Text>
+        <Text
+          style={[
+            styles.label,
+            Typography.caption,
+            { color: isFocused ? Colors.primary : themeColors.subtext },
+          ]}
+        >
+          {label}
+        </Text>
       )}
-      <TextInput
+      <View
         style={[
-          styles.input,
+          styles.inputWrapper,
           {
             backgroundColor: themeColors.card,
-            borderColor: themeColors.border,
-            color: themeColors.text,
+            borderColor: isFocused ? Colors.primary : themeColors.border,
+            borderWidth: isFocused ? 2 : 1,
           },
-          style,
         ]}
-        placeholderTextColor={themeColors.subtext}
-        {...props}
-      />
+      >
+        <TextInput
+          style={[
+            styles.input,
+            Typography.body,
+            {
+              color: themeColors.text,
+            },
+            style,
+          ]}
+          placeholderTextColor={themeColors.subtext}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          {...props}
+        />
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 8,
+    marginVertical: Spacing.sm,
   },
   label: {
-    marginBottom: 6,
-    fontSize: 14,
-    fontWeight: "500",
+    marginBottom: Spacing.xs,
+    fontWeight: "600",
+  },
+  inputWrapper: {
+    borderRadius: 16,
   },
   input: {
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    fontSize: 16,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
   },
 });

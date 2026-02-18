@@ -1,25 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
   KeyboardAvoidingView,
   Platform,
   Switch,
+  Animated,
+  Easing,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { ScreenLayout } from "../components/ScreenLayout";
 import { AppButton } from "../components/AppButton";
-import { AppTextInput } from "../components/AppTextInput";
 import { useThemeColors } from "../hooks/useThemeColors";
-import { Colors } from "../constants/Colors";
+import { Colors, Spacing, Typography } from "../constants/Colors";
 import { useGameStore } from "../store/useGameStore";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { AppTouchable } from "../components/AppTouachable";
+import { AppTouchable } from "../components/AppTouchable";
 
 type RootStackParamList = {
   Game: undefined;
@@ -32,8 +32,6 @@ export const SetupScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const {
     players,
-    addPlayer,
-    removePlayer,
     settings,
     toggleFinalDiscussion,
     setGameMode,
@@ -43,31 +41,44 @@ export const SetupScreen = () => {
   } = useGameStore();
 
   const themeColors = useThemeColors();
-  const [playerName, setPlayerName] = useState("");
 
   const isQuickMode = settings.gameMode === "quick";
   const isOddPlayers = players.length % 2 !== 0;
-  const showQuickWarning = isQuickMode && isOddPlayers;
+  const showQuickWarning = isOddPlayers;
+
+  const handleQuickWarning = () => {
+    Alert.alert(
+      "Giocatori dispari",
+      "La modalità rapida è ottimizzata per un numero pari di giocatori. In caso di numero dispari, alcuni giocatori potrebbero avere un numero diverso di dibattiti.",
+      [{ text: "Ho capito", style: "default" }],
+    );
+  };
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+    ]).start();
+  }, []);
 
   useEffect(() => {
     if (settings.gameMode === "quick" && players.length < 4) {
       setGameMode("all_vs_all");
     }
   }, [players.length, settings.gameMode]);
-
-  const handleAddPlayer = () => {
-    if (!playerName.trim()) return;
-    if (
-      players.some(
-        (p) => p.name.toLowerCase() === playerName.trim().toLowerCase(),
-      )
-    ) {
-      Alert.alert("Errore", "Questo nome esiste già!");
-      return;
-    }
-    addPlayer(playerName.trim());
-    setPlayerName("");
-  };
 
   const handleStartGame = () => {
     if (players.length < 3) {
@@ -81,19 +92,21 @@ export const SetupScreen = () => {
 
   return (
     <ScreenLayout>
-      {/* ───────── HEADER ───────── */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <AppButton
+          variant="icon"
           onPress={() => navigation.goBack()}
-          style={styles.backButton}
+          icon={<Ionicons name="arrow-back" size={24} color={Colors.primary} />}
+        />
+        <Text
+          style={[
+            styles.headerTitle,
+            Typography.h3,
+            { color: themeColors.text },
+          ]}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.primary} />
-        </TouchableOpacity>
-
-        <Text style={[styles.headerTitle, { color: Colors.primary }]}>
           Configurazione
         </Text>
-
         <View style={styles.headerSpacer} />
       </View>
 
@@ -105,187 +118,209 @@ export const SetupScreen = () => {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* ───────── GIOCATORI ───────── */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Giocatori
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => navigation.navigate("Players")}
-              activeOpacity={0.8}
-            >
-              <View
-                style={[
-                  styles.playerCard,
-                  {
-                    backgroundColor: themeColors.card,
-                    justifyContent: "space-between",
-                  },
-                ]}
-              >
-                <View>
-                  <Text
-                    style={{
-                      color: themeColors.text,
-                      fontSize: 20,
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {players.length}
-                  </Text>
-                </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={22}
-                  color={themeColors.subtext}
-                />
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* ───────── MODALITÀ ───────── */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-              Modalità di gioco
-            </Text>
-
-            <View style={styles.gameModeContainer}>
-              <AppTouchable
-                active={settings.gameMode === "all_vs_all"}
-                onPress={() => setGameMode("all_vs_all")}
-              >
-                <Text
-                  style={[
-                    styles.modeTitle,
-                    { color: themeColors.text },
-                    settings.gameMode === "all_vs_all" && {
-                      color: Colors.white,
-                    },
-                  ]}
-                >
-                  Tutti contro tutti
-                </Text>
-                <Text
-                  style={[
-                    styles.modeDescription,
-                    { color: themeColors.subtext },
-                    settings.gameMode === "all_vs_all" && {
-                      color: "rgba(255,255,255,0.8)",
-                    },
-                  ]}
-                >
-                  Ogni giocatore sfida tutti gli altri.
-                </Text>
-              </AppTouchable>
-
-              <AppTouchable
-                active={settings.gameMode === "quick"}
-                disabled={players.length <= 3}
-                onPress={() => setGameMode("quick")}
-              >
-                <View style={styles.quickHeader}>
-                  <Text
-                    style={[
-                      styles.modeTitle,
-                      { color: themeColors.text },
-                      isQuickMode && { color: Colors.white },
-                    ]}
-                  >
-                    Modalità rapida
-                  </Text>
-
-                  {showQuickWarning && (
-                    <TouchableOpacity
-                      onPress={() =>
-                        Alert.alert(
-                          "Attenzione",
-                          "Modalità consigliata con numero PARI di giocatori.",
-                        )
-                      }
-                    >
-                      <View style={styles.warningBadge}>
-                        <Ionicons
-                          name="warning"
-                          size={16}
-                          color={Colors.white}
-                        />
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                </View>
-                <Text
-                  style={[
-                    styles.modeDescription,
-                    { color: themeColors.subtext },
-                    settings.gameMode === "quick" && {
-                      color: "rgba(255,255,255,0.8)",
-                    },
-                  ]}
-                >
-                  Ogni giocatore fa un solo dibattito.
-                </Text>
-                <Text
-                  style={[
-                    styles.modeDescription,
-                    { color: themeColors.subtext },
-                    settings.gameMode === "quick" && {
-                      color: "rgba(255,255,255,0.8)",
-                    },
-                  ]}
-                >
-                  {" "}
-                  (Minimo 4 giocatori)
-                </Text>
-              </AppTouchable>
-            </View>
-          </View>
-
-          {/* ───────── ALTRE IMPOSTAZIONI ───────── */}
-          <View
-            style={[
-              styles.section,
-              { display: "flex", flexDirection: "column", gap: 32 },
-            ]}
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
           >
-            <View>
+            {/* GIOCATORI */}
+            <View style={styles.section}>
               <Text
                 style={[
-                  styles.sectionSubtitle,
-                  { color: themeColors.text, marginBottom: 8 },
+                  styles.sectionTitle,
+                  Typography.h3,
+                  { color: themeColors.text },
+                ]}
+              >
+                Giocatori
+              </Text>
+              <AppTouchable
+                onPress={() => navigation.navigate("Players")}
+                style={styles.playerCard}
+                contentStyle={styles.playerCardContent}
+              >
+                <View style={styles.playerInfo}>
+                  <View
+                    style={[
+                      styles.avatar,
+                      { backgroundColor: Colors.primary + "20" },
+                    ]}
+                  >
+                    <Ionicons name="people" size={24} color={Colors.primary} />
+                  </View>
+                  <View>
+                    <Text
+                      style={[
+                        styles.playerCount,
+                        Typography.h2,
+                        { color: themeColors.text },
+                      ]}
+                    >
+                      {players.length}
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={24}
+                  color={themeColors.subtext}
+                />
+              </AppTouchable>
+            </View>
+
+            {/* MODALITÀ */}
+            <View style={styles.section}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  Typography.h3,
+                  { color: themeColors.text },
+                ]}
+              >
+                Modalità di gioco
+              </Text>
+              <View style={styles.gameModeContainer}>
+                <AppTouchable
+                  active={settings.gameMode === "all_vs_all"}
+                  onPress={() => setGameMode("all_vs_all")}
+                  style={styles.modeCard}
+                  contentStyle={styles.modeCardContent}
+                >
+                  <View style={styles.modeHeader}>
+                    <MaterialCommunityIcons
+                      name="sword-cross"
+                      size={24}
+                      color={
+                        settings.gameMode === "all_vs_all"
+                          ? Colors.white
+                          : Colors.primary
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.modeTitle,
+                        Typography.h3,
+                        {
+                          color:
+                            settings.gameMode === "all_vs_all"
+                              ? Colors.white
+                              : themeColors.text,
+                        },
+                      ]}
+                    >
+                      Tutti contro tutti
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      styles.modeDesc,
+                      Typography.caption,
+                      {
+                        color:
+                          settings.gameMode === "all_vs_all"
+                            ? "rgba(255,255,255,0.8)"
+                            : themeColors.subtext,
+                      },
+                    ]}
+                  >
+                    Ogni giocatore sfida tutti gli altri.
+                  </Text>
+                </AppTouchable>
+
+                <AppTouchable
+                  active={settings.gameMode === "quick"}
+                  disabled={players.length < 4}
+                  onPress={() => setGameMode("quick")}
+                  style={styles.modeCard}
+                  contentStyle={styles.modeCardContent}
+                >
+                  <View style={styles.modeHeader}>
+                    <Ionicons
+                      name="flash"
+                      size={24}
+                      color={isQuickMode ? Colors.white : Colors.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.modeTitle,
+                        Typography.h3,
+                        {
+                          color: isQuickMode ? Colors.white : themeColors.text,
+                        },
+                      ]}
+                    >
+                      Modalità rapida
+                    </Text>
+                    {showQuickWarning && (
+                      <AppTouchable
+                        onPress={handleQuickWarning}
+                        style={styles.warningIcon}
+                        contentStyle={{
+                          backgroundColor: "transparent",
+                          borderWidth: 0,
+                        }}
+                      >
+                        <Ionicons
+                          name="warning"
+                          size={20}
+                          color={isQuickMode ? Colors.white : Colors.warning}
+                        />
+                      </AppTouchable>
+                    )}
+                  </View>
+                  <Text
+                    style={[
+                      styles.modeDesc,
+                      Typography.caption,
+                      {
+                        color: isQuickMode
+                          ? "rgba(255,255,255,0.8)"
+                          : themeColors.subtext,
+                      },
+                    ]}
+                  >
+                    Ogni giocatore partecipa a un solo dibattito.
+                  </Text>
+                  {players.length < 4 && (
+                    <Text style={[styles.minPlayers, { color: Colors.danger }]}>
+                      (Minimo 4 giocatori)
+                    </Text>
+                  )}
+                </AppTouchable>
+              </View>
+            </View>
+
+            {/* DURATA ROUND */}
+            <View style={styles.section}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  Typography.h3,
+                  { color: themeColors.text },
                 ]}
               >
                 Durata round
               </Text>
-
-              <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={styles.durationGrid}>
                 {[30, 60, 120].map((duration) => {
                   const isActive = settings.roundDuration === duration;
-
                   return (
-                    <TouchableOpacity
+                    <AppTouchable
                       key={duration}
                       onPress={() =>
                         setRoundDuration(duration as 30 | 60 | 120)
                       }
-                      style={[
-                        styles.durationButton,
-                        {
-                          borderColor: isActive
-                            ? Colors.primary
-                            : themeColors.border,
-                          backgroundColor: isActive
-                            ? Colors.primary
-                            : "transparent",
-                        },
-                      ]}
+                      active={isActive}
+                      style={styles.durationButton}
+                      contentStyle={styles.durationButtonContent}
                     >
                       <Text
-                        style={{
-                          color: isActive ? Colors.white : themeColors.text,
-                          fontWeight: "600",
-                        }}
+                        style={[
+                          styles.durationText,
+                          Typography.button,
+                          { color: isActive ? Colors.white : themeColors.text },
+                        ]}
                       >
                         {duration === 30
                           ? "30s"
@@ -293,53 +328,75 @@ export const SetupScreen = () => {
                             ? "1 min"
                             : "2 min"}
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchable>
                   );
                 })}
               </View>
             </View>
 
-            <View style={[styles.switchRow, { alignItems: "center" }]}>
-              <Text
-                style={[styles.sectionSubtitle, { color: themeColors.text }]}
+            {/* ALTRE IMPOSTAZIONI */}
+            <View style={styles.section}>
+              <View
+                style={[
+                  styles.switchRow,
+                  { backgroundColor: themeColors.card },
+                ]}
               >
-                Rimuovi discussione finale
-              </Text>
-
-              <Switch
-                value={settings.removeFinalDiscussion}
-                onValueChange={toggleFinalDiscussion}
-                trackColor={{
-                  false: themeColors.border,
-                  true: Colors.primary,
-                }}
-                thumbColor={Colors.white}
-              />
+                <View style={styles.switchLabel}>
+                  <Ionicons
+                    name="chatbubbles-outline"
+                    size={22}
+                    color={Colors.primary}
+                  />
+                  <Text
+                    style={[
+                      Typography.body,
+                      { color: themeColors.text, fontWeight: "600" },
+                    ]}
+                  >
+                    Discussione finale
+                  </Text>
+                </View>
+                <Switch
+                  value={!settings.removeFinalDiscussion}
+                  onValueChange={(val) => toggleFinalDiscussion()}
+                  trackColor={{
+                    false: themeColors.border,
+                    true: Colors.primary,
+                  }}
+                  thumbColor={Colors.white}
+                />
+              </View>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
 
-        {/* ───────── FOOTER ───────── */}
-        <View style={styles.footer}>
+        {/* FOOTER */}
+        <View
+          style={[styles.footer, { backgroundColor: themeColors.background }]}
+        >
+          {players.length >= 3 && (
+            <View style={styles.timeEstimate}>
+              <Ionicons
+                name="time-outline"
+                size={18}
+                color={themeColors.subtext}
+              />
+              <Text
+                style={[Typography.caption, { color: themeColors.subtext }]}
+              >
+                Durata stimata:{" "}
+                <Text style={{ color: Colors.primary, fontWeight: "700" }}>
+                  {estimateGameDurationFormatted()}
+                </Text>
+              </Text>
+            </View>
+          )}
           <AppButton
             title="INIZIA PARTITA"
             onPress={handleStartGame}
             disabled={players.length < 3}
-            variant="primary"
           />
-
-          {players.length >= 3 && (
-            <View style={styles.durationRow}>
-              <Text
-                style={[styles.sectionSubtitle, { color: themeColors.text }]}
-              >
-                Durata stimata partita:
-              </Text>
-              <Text style={{ color: themeColors.subtext, fontSize: 16 }}>
-                {estimateGameDurationFormatted()}
-              </Text>
-            </View>
-          )}
         </View>
       </KeyboardAvoidingView>
     </ScreenLayout>
@@ -350,110 +407,136 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingBottom: 10,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
   },
   headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
   headerSpacer: {
-    width: 40,
+    width: 44,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.xl,
   },
   section: {
-    marginBottom: 30,
+    marginTop: Spacing.lg,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 10,
+    marginBottom: Spacing.sm,
   },
-  sectionSubtitle: {
-    fontSize: 16,
-    fontWeight: "500",
+  playerCard: {
+    width: "100%",
   },
-  inputContainer: {
+  playerCardContent: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 4,
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: Spacing.md,
   },
-  addButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 12,
+  playerInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: "center",
     alignItems: "center",
   },
-
-  playerName: {
-    fontSize: 16,
-  },
-  playerCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  emptyText: {
-    textAlign: "center",
-    padding: 20,
-    fontStyle: "italic",
+  playerCount: {
+    lineHeight: 32,
   },
   gameModeContainer: {
-    gap: 12,
+    gap: Spacing.md,
   },
-  modeTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
+  modeCard: {
+    width: "100%",
   },
-  modeDescription: {
-    fontSize: 14,
+  modeCardContent: {
+    alignItems: "center",
+    padding: Spacing.md,
   },
-  quickHeader: {
+  modeHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 4,
+    gap: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
-  warningBadge: {
-    backgroundColor: Colors.warning ?? "#F59E0B",
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+  modeTitle: {
+    fontWeight: "bold",
   },
+  modeDesc: {
+    lineHeight: 18,
+  },
+  minPlayers: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  warningIcon: {
+    padding: 4,
+  },
+  durationGrid: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    width: "100%",
+  },
+
   durationButton: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    alignItems: "center",
+    height: 56,
+  },
+  durationButtonContent: {
+    padding: Spacing.sm,
+  },
+  durationText: {
+    fontWeight: "700",
   },
   switchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
+    padding: Spacing.md,
+    borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
   },
-  footer: {
-    paddingTop: 10,
-  },
-  durationRow: {
-    marginTop: 10,
+  switchLabel: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: Spacing.sm,
+  },
+  footer: {
+    padding: Spacing.lg,
+    paddingBottom: Platform.OS === "ios" ? 34 : Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(0,0,0,0.05)",
+    gap: Spacing.md,
+  },
+  timeEstimate: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
   },
 });

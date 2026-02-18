@@ -6,14 +6,15 @@ import {
   ScrollView,
   Animated,
   Alert,
-  TouchableOpacity,
   Modal,
-  Button,
+  Platform,
+  Easing,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { ScreenLayout } from "../components/ScreenLayout";
 import { AppButton } from "../components/AppButton";
-import { Colors } from "../constants/Colors";
+import { AppTouchable } from "../components/AppTouchable";
+import { Colors, Spacing, Typography } from "../constants/Colors";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { useGameStore } from "../store/useGameStore";
 import { GamePhase } from "../types";
@@ -54,8 +55,33 @@ export const GameScreen = () => {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = (timeLeft % 60).toString().padStart(2, "0");
 
-  // Animation for timer
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  // Animations
+  const phaseFadeAnim = useRef(new Animated.Value(0)).current;
+  const phaseSlideAnim = useRef(new Animated.Value(20)).current;
+  const timerScaleAnim = useRef(new Animated.Value(1)).current;
+
+  const animatePhase = () => {
+    phaseFadeAnim.setValue(0);
+    phaseSlideAnim.setValue(20);
+    Animated.parallel([
+      Animated.timing(phaseFadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+      Animated.timing(phaseSlideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }),
+    ]).start();
+  };
+
+  useEffect(() => {
+    animatePhase();
+  }, [phase]);
 
   // Effect to handle navigation to Victory
   useEffect(() => {
@@ -85,6 +111,21 @@ export const GameScreen = () => {
             play("end");
             return 0;
           }
+          if (prev <= 10) {
+            // Pulse animation for last 10 seconds
+            Animated.sequence([
+              Animated.timing(timerScaleAnim, {
+                toValue: 1.1,
+                duration: 100,
+                useNativeDriver: true,
+              }),
+              Animated.timing(timerScaleAnim, {
+                toValue: 1,
+                duration: 100,
+                useNativeDriver: true,
+              }),
+            ]).start();
+          }
           return prev - 1;
         });
       }, 1000);
@@ -103,7 +144,6 @@ export const GameScreen = () => {
     }
   };
 
-  // Helper to get player name
   const getPlayerName = (id: string) =>
     players.find((p) => p.id === id)?.name || "Unknown";
 
@@ -113,9 +153,7 @@ export const GameScreen = () => {
   };
 
   const confirmVotes = () => {
-    // Ensure all judges voted
     if (roundData && Object.keys(votes).length < roundData.judgeIds.length) {
-      // Optional: Alert user
       return;
     }
     submitVotes(votes);
@@ -146,16 +184,11 @@ export const GameScreen = () => {
       "Uscire dalla partita?",
       "Se esci ora, la partita verrà terminata e tornerai alla schermata principale.",
       [
-        {
-          text: "Annulla",
-          style: "cancel",
-        },
+        { text: "Annulla", style: "cancel" },
         {
           text: "Esci",
           style: "destructive",
-          onPress: () => {
-            navigation.navigate("Home");
-          },
+          onPress: () => navigation.navigate("Home"),
         },
       ],
     );
@@ -167,164 +200,404 @@ export const GameScreen = () => {
   const opponentName = getPlayerName(roundData.opponentId);
 
   const renderPhaseContent = () => {
-    switch (phase) {
-      case "ROUND_INTRO":
-        return (
-          <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>{`Turno ${roundNumber}`}</Text>
-            <View style={styles.versusContainer}>
-              <Text style={[styles.activePlayer, { color: themeColors.text }]}>
-                {defenderName}
-              </Text>
-              <Text style={styles.versus}>VS</Text>
-              <Text style={[styles.activePlayer, { color: themeColors.text }]}>
-                {opponentName}
-              </Text>
-            </View>
-
-            <View style={styles.timerControls}>
-              <AppButton
-                title={"AVVIA"}
-                onPress={handleNextPhase}
-                variant={"primary"}
-                style={styles.controlButton}
-              />
-            </View>
-          </View>
-        );
-      case "DEFENSE":
-        return (
-          <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>Difesa della tesi</Text>
-            <Text style={[styles.activePlayer, { color: themeColors.text }]}>
-              {defenderName}
-            </Text>
-            <Text style={[styles.instruction, { color: themeColors.subtext }]}>
-              Argomenta a favore!
-            </Text>
-          </View>
-        );
-      case "OFFENSE":
-        return (
-          <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>Antitesi</Text>
-            <Text style={[styles.activePlayer, { color: themeColors.text }]}>
-              {opponentName}
-            </Text>
-            <Text style={[styles.instruction, { color: themeColors.subtext }]}>
-              Argomenta contro!
-            </Text>
-          </View>
-        );
-      case "DISCUSSION":
-        return (
-          <View style={styles.phaseContainer}>
-            <Text style={styles.phaseTitle}>Discussione finale</Text>
-            <View style={styles.versusContainer}>
-              <Text style={[styles.activePlayer, { color: themeColors.text }]}>
-                {defenderName}
-              </Text>
-              <Text style={styles.versus}>VS</Text>
-              <Text style={[styles.activePlayer, { color: themeColors.text }]}>
-                {opponentName}
-              </Text>
-            </View>
-          </View>
-        );
-      case "VOTING":
-        return (
-          <View style={styles.votingContainer}>
-            <Text style={styles.phaseTitle}>Votazione</Text>
-            <Text style={[styles.instruction, { color: themeColors.subtext }]}>
-              Giudici, chi vi ha convinto?
-            </Text>
-
-            <ScrollView
-              style={styles.judgesList}
-              showsVerticalScrollIndicator={false}
-            >
-              {roundData.judgeIds.map((judgeId) => (
-                <View
-                  key={judgeId}
-                  style={[
-                    styles.voteCard,
-                    { backgroundColor: themeColors.card },
-                  ]}
-                >
-                  <Text style={[styles.judgeName, { color: themeColors.text }]}>
-                    {getPlayerName(judgeId)} vota per:
-                  </Text>
-                  <View style={styles.voteButtons}>
-                    <AppButton
-                      title={defenderName}
-                      onPress={() => handleVote(judgeId, roundData.defenderId)}
-                      variant={
-                        votes[judgeId] === roundData.defenderId
-                          ? "primary"
-                          : "outline"
-                      }
-                      style={styles.voteBtn}
-                    />
-                    <AppButton
-                      title={opponentName}
-                      onPress={() => handleVote(judgeId, roundData.opponentId)}
-                      variant={
-                        votes[judgeId] === roundData.opponentId
-                          ? "secondary"
-                          : "outline"
-                      }
-                      style={styles.voteBtn}
-                    />
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-
-            <AppButton
-              title="CONFERMA VOTI"
-              onPress={confirmVotes}
-              disabled={Object.keys(votes).length < roundData.judgeIds.length}
-            />
-          </View>
-        );
-      case "ROUND_END":
-        return (
-          <View style={styles.roundEndContainer}>
-            <Text style={styles.phaseTitle}>Fine Turno</Text>
-            <View
-              style={[
-                styles.scoresContainer,
-                { backgroundColor: themeColors.card },
-              ]}
-            >
-              <Text style={[styles.sectionHeader, { color: themeColors.text }]}>
-                Classifica Attuale
-              </Text>
-              {players
-                .sort((a, b) => b.score - a.score)
-                .map((p) => (
+    const content = (() => {
+      switch (phase) {
+        case "ROUND_INTRO":
+          return (
+            <View style={styles.phaseContainer}>
+              {/*   <View style={styles.roundBadge}>
+                <Text style={[styles.roundBadgeText, { color: Colors.white }]}>
+                  ROUND {roundNumber}
+                </Text>
+              </View> */}
+              <View style={styles.versusLayout}>
+                <View style={styles.playerColumn}>
                   <View
-                    key={p.id}
                     style={[
-                      styles.scoreRow,
-                      { borderBottomColor: themeColors.border },
+                      styles.bigAvatar,
+                      { backgroundColor: Colors.primary + "20" },
                     ]}
                   >
                     <Text
-                      style={[styles.scoreName, { color: themeColors.text }]}
+                      style={[styles.avatarChar, { color: Colors.primary }]}
                     >
-                      {p.name}
+                      {defenderName.charAt(0).toUpperCase()}
                     </Text>
-                    <Text style={styles.scoreValue}>{p.score}</Text>
+                  </View>
+                  <Text
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                    style={[
+                      styles.activePlayer,
+                      Typography.h2,
+                      { color: themeColors.text },
+                    ]}
+                  >
+                    {defenderName}
+                  </Text>
+                  <Text
+                    style={[
+                      Typography.caption,
+                      { color: Colors.primary, fontWeight: "700" },
+                    ]}
+                  >
+                    DIFENSORE
+                  </Text>
+                </View>
+
+                <View style={styles.vsContainer}>
+                  <View style={styles.vsCircle}>
+                    <Text style={styles.vsText}>VS</Text>
+                  </View>
+                </View>
+
+                <View style={styles.playerColumn}>
+                  <View
+                    style={[
+                      styles.bigAvatar,
+                      { backgroundColor: Colors.secondary + "20" },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.avatarChar, { color: Colors.secondary }]}
+                    >
+                      {opponentName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                    style={[
+                      styles.activePlayer,
+                      Typography.h2,
+                      { color: themeColors.text },
+                    ]}
+                  >
+                    {opponentName}
+                  </Text>
+                  <Text
+                    style={[
+                      Typography.caption,
+                      { color: Colors.secondary, fontWeight: "700" },
+                    ]}
+                  >
+                    ATTACCANTE
+                  </Text>
+                </View>
+              </View>
+              <AppButton
+                title="COMINCIA"
+                onPress={handleNextPhase}
+                style={styles.introButton}
+              />
+            </View>
+          );
+        case "DEFENSE":
+          return (
+            <View style={styles.phaseContainer}>
+              <View
+                style={[styles.roleBadge, { backgroundColor: Colors.primary }]}
+              >
+                <Text style={[styles.roleText, { color: Colors.white }]}>
+                  DIFESA
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.activePlayerName,
+                  Typography.h1,
+                  { color: themeColors.text },
+                ]}
+              >
+                {defenderName}
+              </Text>
+              <Text
+                style={[
+                  styles.instruction,
+                  Typography.body,
+                  { color: themeColors.subtext },
+                ]}
+              >
+                Argomenta a favore della tesi!
+              </Text>
+            </View>
+          );
+        case "OFFENSE":
+          return (
+            <View style={styles.phaseContainer}>
+              <View
+                style={[
+                  styles.roleBadge,
+                  { backgroundColor: Colors.secondary },
+                ]}
+              >
+                <Text style={[styles.roleText, { color: Colors.white }]}>
+                  ATTACCO
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.activePlayerName,
+                  Typography.h1,
+                  { color: themeColors.text },
+                ]}
+              >
+                {opponentName}
+              </Text>
+              <Text
+                style={[
+                  styles.instruction,
+                  Typography.body,
+                  { color: themeColors.subtext },
+                ]}
+              >
+                Argomenta contro la tesi!
+              </Text>
+            </View>
+          );
+        case "DISCUSSION":
+          return (
+            <View style={styles.phaseContainer}>
+              <View
+                style={[styles.roleBadge, { backgroundColor: Colors.warning }]}
+              >
+                <Text style={[styles.roleText, { color: Colors.black }]}>
+                  DIBATTITO FINALE
+                </Text>
+              </View>
+              <View style={styles.versusRow}>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[
+                    styles.versusPlayer,
+                    Typography.h3,
+                    { color: themeColors.text },
+                  ]}
+                >
+                  {defenderName}
+                </Text>
+                <Text style={styles.vsSmall}>VS</Text>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[
+                    styles.versusPlayer,
+                    Typography.h3,
+                    { color: themeColors.text },
+                  ]}
+                >
+                  {opponentName}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.instruction,
+                  Typography.body,
+                  { color: themeColors.subtext },
+                ]}
+              >
+                Confronto libero!
+              </Text>
+            </View>
+          );
+        case "VOTING":
+          return (
+            <View style={votingStyles.votingContainer}>
+              <Text
+                style={[
+                  styles.phaseTitle,
+                  Typography.h2,
+                  { color: Colors.primary },
+                ]}
+              >
+                Votazione
+              </Text>
+              <ScrollView
+                style={votingStyles.judgesList}
+                showsVerticalScrollIndicator={false}
+              >
+                {roundData.judgeIds.map((judgeId) => (
+                  <View
+                    key={judgeId}
+                    style={[
+                      votingStyles.voteCard,
+                      { backgroundColor: themeColors.card },
+                    ]}
+                  >
+                    <View style={votingStyles.voteHeader}>
+                      <Ionicons
+                        name="person"
+                        size={16}
+                        color={Colors.primary}
+                      />
+                      <Text
+                        style={[
+                          votingStyles.judgeName,
+                          Typography.body,
+                          { color: themeColors.text },
+                        ]}
+                      >
+                        Giudice:{" "}
+                        <Text style={{ fontWeight: "800" }}>
+                          {getPlayerName(judgeId)}
+                        </Text>
+                      </Text>
+                    </View>
+                    <View style={votingStyles.voteButtons}>
+                      <AppTouchable
+                        style={votingStyles.voteOption}
+                        contentStyle={votingStyles.voteOptionContent}
+                        active={votes[judgeId] === roundData.defenderId}
+                        onPress={() =>
+                          handleVote(judgeId, roundData.defenderId)
+                        }
+                      >
+                        <Text
+                          style={[
+                            votingStyles.voteOptionText,
+                            {
+                              color:
+                                votes[judgeId] === roundData.defenderId
+                                  ? Colors.white
+                                  : themeColors.text,
+                            },
+                          ]}
+                        >
+                          {defenderName}
+                        </Text>
+                      </AppTouchable>
+                      <AppTouchable
+                        style={votingStyles.voteOption}
+                        contentStyle={votingStyles.voteOptionContent}
+                        active={votes[judgeId] === roundData.opponentId}
+                        onPress={() =>
+                          handleVote(judgeId, roundData.opponentId)
+                        }
+                      >
+                        <Text
+                          style={[
+                            votingStyles.voteOptionText,
+                            {
+                              color:
+                                votes[judgeId] === roundData.opponentId
+                                  ? Colors.white
+                                  : themeColors.text,
+                            },
+                          ]}
+                        >
+                          {opponentName}
+                        </Text>
+                      </AppTouchable>
+                    </View>
                   </View>
                 ))}
+              </ScrollView>
+              <AppButton
+                title="CONFERMA VOTI"
+                onPress={confirmVotes}
+                disabled={Object.keys(votes).length < roundData.judgeIds.length}
+              />
             </View>
-            <AppButton title="PROSSIMO ROUND" onPress={startRound} />
-          </View>
-        );
-      default:
-        return null;
-    }
+          );
+        case "ROUND_END":
+          return (
+            <View style={styles.roundEndContainer}>
+              <Text
+                style={[
+                  styles.phaseTitle,
+                  Typography.h2,
+                  { color: Colors.primary },
+                ]}
+              >
+                Fine round {roundNumber}
+              </Text>
+              <View
+                style={[
+                  styles.leaderboardCard,
+                  { backgroundColor: themeColors.card },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.leaderboardTitle,
+                    Typography.h3,
+                    { color: themeColors.text },
+                  ]}
+                >
+                  Classifica
+                </Text>
+                {players
+                  .sort((a, b) => b.score - a.score)
+                  .map((p, index) => (
+                    <View
+                      key={p.id}
+                      style={[
+                        styles.leaderboardRow,
+                        { borderBottomColor: themeColors.border },
+                        index === players.length - 1 && {
+                          borderBottomWidth: 0,
+                        },
+                      ]}
+                    >
+                      <View style={styles.playerRank}>
+                        <Text
+                          style={[styles.rankText, { color: Colors.primary }]}
+                        >
+                          #{index + 1}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.playerName,
+                            Typography.body,
+                            { color: themeColors.text },
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.scoreBadge,
+                          { backgroundColor: Colors.primary + "10" },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.scoreValue, { color: Colors.primary }]}
+                        >
+                          {p.score}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+              </View>
+              <AppButton title="PROSSIMO ROUND" onPress={startRound} />
+            </View>
+          );
+        default:
+          return null;
+      }
+    })();
+
+    return (
+      <Animated.View
+        style={[
+          styles.animatedContent,
+          {
+            opacity: phaseFadeAnim,
+            transform: [{ translateY: phaseSlideAnim }],
+          },
+        ]}
+      >
+        {content}
+      </Animated.View>
+    );
+  };
+
+  const handleSkipTimer = () => {
+    setTimerStatus("FINISHED");
+    setTimeLeft(0);
+    play("end");
   };
 
   const isTimerPhase = ["DEFENSE", "OFFENSE", "DISCUSSION"].includes(phase);
@@ -332,101 +605,109 @@ export const GameScreen = () => {
   return (
     <ScreenLayout>
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleExitGame} style={styles.backButton}>
-          <Ionicons name="close" size={24} color={Colors.primary} />
-        </TouchableOpacity>
-        {/*     <Text style={styles.headerTitle}>Dibattito in corso</Text> */}
-        <View style={styles.roundInfo}>
-          {phase !== "ROUND_END" &&
-            phase !== "VOTING" &&
-            phase !== "ROUND_INTRO" && (
-              <TouchableOpacity
-                onPress={() => {
-                  play("next");
-                  nextPhase();
-                }}
-                style={styles.skipButton}
-              >
-                <Text style={[styles.skipText, { color: themeColors.subtext }]}>
-                  Salta
-                </Text>
-                <Ionicons
-                  name="play-forward"
-                  size={16}
-                  color={themeColors.subtext}
-                />
-              </TouchableOpacity>
-            )}
-        </View>
+        <AppButton
+          variant="icon"
+          onPress={handleExitGame}
+          icon={<Ionicons name="close" size={24} color={Colors.danger} />}
+        />
+
+        <Text
+          style={[
+            Typography.h3,
+            { color: themeColors.text, fontWeight: "800" },
+          ]}
+        >
+          Round {roundNumber}
+        </Text>
+
+        <AppButton
+          variant="icon"
+          onPress={toggleLeaderboard}
+          icon={<Ionicons name="podium" size={22} color={Colors.primary} />}
+        />
       </View>
 
       {phase !== "ROUND_INTRO" && (
         <View
-          style={[
-            styles.thesisContainer,
-            { backgroundColor: themeColors.card },
-          ]}
+          style={[styles.thesisCard, { backgroundColor: themeColors.card }]}
         >
-          <Text style={styles.thesisLabel}>TESI:</Text>
-          <Text style={[styles.thesisText, { color: themeColors.text }]}>
+          <View style={styles.thesisHeader}>
+            <Ionicons name="bulb-outline" size={16} color={Colors.primary} />
+            <Text style={[styles.thesisLabel, { color: Colors.primary }]}>
+              TESI
+            </Text>
+          </View>
+          <Text
+            style={[
+              styles.thesisText,
+              Typography.h3,
+              { color: themeColors.text },
+            ]}
+          >
             {roundData.thesis}
           </Text>
         </View>
       )}
 
       {isTimerPhase && (
-        <View style={styles.timerContainer}>
-          <Text
-            style={[
-              styles.timer,
-              { color: themeColors.text },
-              timeLeft <= 10 && styles.timerUrgent,
-            ]}
-          >
-            {timeLeft > 0 ? `${minutes}:${seconds}` : "Tempo scaduto!"}
-          </Text>
+        <View style={styles.timerSection}>
+          <Animated.View style={{ transform: [{ scale: timerScaleAnim }] }}>
+            <Text
+              style={[
+                styles.timerText,
+                { color: themeColors.text },
+                timeLeft <= 10 && { color: Colors.danger },
+              ]}
+            >
+              {timeLeft > 0 ? `${minutes}:${seconds}` : "STOP!"}
+            </Text>
+          </Animated.View>
 
           <View style={styles.timerControls}>
             {timerStatus === "FINISHED" ? (
               <AppButton
                 title="PROSSIMA FASE"
                 onPress={handleNextPhase}
-                style={styles.controlButton}
+                style={styles.timerBtn}
               />
             ) : (
-              <AppButton
-                title={
-                  timerStatus === "RUNNING"
-                    ? "PAUSA"
-                    : timerStatus === "IDLE"
-                      ? "AVVIA"
-                      : "RIPRENDI"
-                }
-                onPress={toggleTimer}
-                variant={timerStatus === "RUNNING" ? "secondary" : "primary"}
-                style={styles.controlButton}
-              />
+              <View style={styles.controlsRow}>
+                <AppButton
+                  title={
+                    timerStatus === "RUNNING"
+                      ? "PAUSA"
+                      : timerStatus === "IDLE"
+                        ? "AVVIA"
+                        : "RIPRENDI"
+                  }
+                  onPress={toggleTimer}
+                  variant={timerStatus === "RUNNING" ? "secondary" : "primary"}
+                  style={styles.timerBtn}
+                />
+                {(timerStatus === "RUNNING" || timerStatus === "PAUSED") && (
+                  <AppButton
+                    variant="icon"
+                    onPress={handleSkipTimer}
+                    icon={
+                      <Ionicons
+                        name="play-skip-forward"
+                        size={24}
+                        color={Colors.primary}
+                      />
+                    }
+                    style={styles.skipBtn}
+                  />
+                )}
+              </View>
             )}
           </View>
         </View>
       )}
 
-      <View style={styles.content}>{renderPhaseContent()}</View>
-
-      {roundNumber >= 2 && phase !== "ROUND_END" && phase !== "VOTING" && (
-        <View style={styles.footer}>
-          <TouchableOpacity
-            onPress={toggleLeaderboard}
-            style={styles.footerButton}
-          >
-            <Ionicons name="podium" size={20} color={Colors.white} />
-            <Text style={styles.footerButtonText}>Classifica</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.mainContent}>{renderPhaseContent()}</View>
 
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={isLeaderboardVisible}
         onRequestClose={() => setLeaderboardVisible(false)}
@@ -436,16 +717,31 @@ export const GameScreen = () => {
             style={[
               styles.modalContent,
               {
-                backgroundColor: themeColors.card,
+                backgroundColor: themeColors.background,
                 borderColor: themeColors.border,
               },
             ]}
           >
-            <Text style={[styles.modalTitle, { color: themeColors.text }]}>
-              Classifica
-            </Text>
+            <View style={styles.modalHeader}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  Typography.h2,
+                  { color: themeColors.text },
+                ]}
+              >
+                Classifica
+              </Text>
+              <AppButton
+                variant="icon"
+                onPress={() => setLeaderboardVisible(false)}
+                icon={
+                  <Ionicons name="close" size={24} color={Colors.primary} />
+                }
+              />
+            </View>
             <ScrollView
-              style={styles.modalList}
+              style={styles.modalScroll}
               showsVerticalScrollIndicator={false}
             >
               {players
@@ -454,17 +750,38 @@ export const GameScreen = () => {
                   <View
                     key={p.id}
                     style={[
-                      styles.scoreRow,
+                      styles.leaderboardRow,
                       { borderBottomColor: themeColors.border },
                     ]}
                   >
-                    <Text style={styles.scoreRank}>#{index + 1}</Text>
-                    <Text
-                      style={[styles.scoreName, { color: themeColors.text }]}
+                    <View style={styles.playerRank}>
+                      <Text
+                        style={[styles.rankText, { color: Colors.primary }]}
+                      >
+                        #{index + 1}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.playerName,
+                          Typography.body,
+                          { color: themeColors.text },
+                        ]}
+                      >
+                        {p.name}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.scoreBadge,
+                        { backgroundColor: Colors.primary + "10" },
+                      ]}
                     >
-                      {p.name}
-                    </Text>
-                    <Text style={styles.scoreValue}>{p.score}</Text>
+                      <Text
+                        style={[styles.scoreValue, { color: Colors.primary }]}
+                      >
+                        {p.score}
+                      </Text>
+                    </View>
                   </View>
                 ))}
             </ScrollView>
@@ -479,227 +796,310 @@ export const GameScreen = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  backButton: {
-    padding: 5,
-  },
-  headerTitle: {
-    fontSize: 14,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  roundInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconButton: {
-    marginRight: 10,
-    padding: 5,
-  },
-  skipButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    padding: 5,
-  },
-  skipText: {
-    fontSize: 12,
-  },
-  thesisContainer: {
-    padding: 20,
-    borderRadius: 15,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  thesisLabel: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-  thesisText: {
-    fontSize: 20,
-    fontWeight: "600",
-    lineHeight: 28,
-  },
-  timerContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  timer: {
-    fontSize: 64,
-    fontWeight: "900",
-    fontVariant: ["tabular-nums"],
-    textAlign: "center",
-  },
-  introCount: {
-    fontSize: 72,
-    fontWeight: "900",
-    textAlign: "center",
-    color: Colors.primary,
-    marginTop: 20,
-  },
-  timerControls: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-    width: "100%",
-    paddingHorizontal: 40,
-  },
-  controlButton: {
-    flex: 1,
-  },
-  timerUrgent: {
-    color: Colors.danger,
-  },
-  content: {
-    flex: 1,
-  },
-  phaseContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  phaseTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: Colors.primary,
-    marginBottom: 10,
-  },
-  activePlayer: {
-    fontSize: 32,
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  instruction: {
-    fontSize: 16,
-    marginTop: 10,
-    fontStyle: "italic",
-  },
-  versusContainer: {
-    flexDirection: "column",
-    alignItems: "center",
-    gap: 15,
-    marginTop: 20,
-  },
-  versus: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: Colors.danger,
-    fontStyle: "italic",
-  },
+const votingStyles = StyleSheet.create({
   votingContainer: {
     flex: 1,
   },
   judgesList: {
     flex: 1,
-    marginVertical: 20,
+    marginVertical: Spacing.md,
   },
   voteCard: {
-    marginBottom: 20,
-    padding: 15,
-    borderRadius: 12,
+    padding: Spacing.md,
+    borderRadius: 16,
+    marginBottom: Spacing.sm,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  voteHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: Spacing.sm,
   },
   judgeName: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 10,
+    fontSize: 14,
   },
   voteButtons: {
     flexDirection: "row",
-    gap: 10,
+    gap: Spacing.sm,
   },
-  voteBtn: {
+  voteOption: {
     flex: 1,
-    marginVertical: 0,
-    paddingVertical: 10,
+    height: 54,
+  },
+  voteOptionContent: {
+    paddingHorizontal: Spacing.sm,
+  },
+  voteOptionText: {
+    fontWeight: "700",
+    fontSize: 14,
+  },
+});
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  thesisCard: {
+    padding: Spacing.lg,
+    borderRadius: 24,
+    marginBottom: Spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  thesisHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  thesisLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
+  thesisText: {
+    fontWeight: "700",
+    lineHeight: 28,
+  },
+  timerSection: {
+    alignItems: "center",
+    marginBottom: Spacing.xl,
+  },
+  timerText: {
+    fontSize: 72,
+    fontWeight: "900",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -2,
+  },
+  timerControls: {
+    flexDirection: "row",
+    marginTop: Spacing.md,
+    width: "100%",
+    paddingHorizontal: Spacing.xl,
+  },
+  timerBtn: {
+    flex: 1,
+  },
+  controlsRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  skipBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.primary + "15",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  mainContent: {
+    flex: 1,
+  },
+  phaseContainer: {
+    alignItems: "center",
+    paddingTop: Spacing.lg,
+  },
+  roundBadge: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginBottom: Spacing.lg,
+  },
+  roundBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  versusLayout: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  playerColumn: {
+    flex: 1,
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  vsContainer: {
+    width: 60,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bigAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarChar: {
+    fontSize: 32,
+    fontWeight: "800",
+  },
+  activePlayer: {
+    textAlign: "center",
+  },
+  vsCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.white,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  vsText: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: Colors.primary,
+  },
+  introButton: {
+    width: "80%",
+  },
+  roleBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: Spacing.md,
+  },
+  roleText: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  activePlayerName: {
+    textAlign: "center",
+    marginBottom: Spacing.xs,
+  },
+  instruction: {
+    textAlign: "center",
+  },
+  versusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  versusPlayer: {
+    flex: 1,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  vsSmall: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: Colors.warning,
+  },
+  phaseTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.md,
   },
   roundEndContainer: {
     flex: 1,
-    width: "100%",
+    paddingHorizontal: Spacing.md,
   },
-  scoresContainer: {
-    flex: 1,
-    borderRadius: 15,
-    padding: 20,
-    marginVertical: 20,
+  leaderboardCard: {
+    padding: Spacing.lg,
+    borderRadius: 24,
+    marginBottom: Spacing.xl,
   },
-  sectionHeader: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
+  leaderboardTitle: {
+    textAlign: "center",
+    marginBottom: Spacing.lg,
   },
-  scoreRow: {
+  leaderboardRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingVertical: 10,
+    alignItems: "center",
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
   },
-  scoreName: {
+  playerRank: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  rankText: {
     fontSize: 16,
+    fontWeight: "900",
+    width: 30,
+  },
+  playerName: {
+    fontWeight: "600",
+  },
+  scoreBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   scoreValue: {
+    fontWeight: "800",
     fontSize: 16,
-    fontWeight: "bold",
-    color: Colors.primary,
+  },
+  animatedContent: {
+    flex: 1,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
+    padding: Spacing.xl,
   },
   modalContent: {
-    borderRadius: 15,
-    padding: 20,
-    width: "100%",
-    maxHeight: "80%",
+    borderRadius: 32,
+    padding: Spacing.xl,
     borderWidth: 1,
+    maxHeight: "80%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.xl,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
+    fontWeight: "800",
   },
-  modalList: {
-    marginBottom: 20,
-  },
-  scoreRank: {
-    fontSize: 18,
-    color: Colors.primary,
-    fontWeight: "bold",
-    width: 40,
-  },
-  footer: {
-    paddingVertical: 10,
-    alignItems: "center",
-  },
-  footerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: Colors.primary,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    gap: 8,
-  },
-  footerButtonText: {
-    color: Colors.white,
-    fontWeight: "bold",
-  },
-  startButtonContainer: {
-    marginTop: 20,
+  modalScroll: {
+    marginBottom: Spacing.xl,
   },
 });

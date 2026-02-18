@@ -334,13 +334,9 @@ export const useGameStore = create<GameState>()(
       },
 
       estimateGameDurationFormatted: () => {
-        const totalTime = get().estimateGameDuration();
-        const minutes = Math.floor(totalTime / 60);
-        const seconds = totalTime % 60;
-
-        if (minutes > 0 && seconds > 0) return `${minutes} min ${seconds} s`;
-        if (minutes > 0) return `${minutes} min`;
-        return `${seconds} s`;
+        const totalTime = get().estimateGameDuration(); // secondi
+        const minutes = Math.round(totalTime / 60); // arrotonda al minuto più vicino
+        return `${minutes} min`;
       },
     }),
     {

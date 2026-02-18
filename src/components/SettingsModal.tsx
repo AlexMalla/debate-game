@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Modal,
-  TouchableOpacity,
-  Switch,
-} from "react-native";
+import { View, Text, StyleSheet, Modal, Switch } from "react-native";
 import { Colors } from "../constants/Colors";
 import { useGameStore } from "../store/useGameStore";
 import { AppButton } from "./AppButton";
@@ -38,9 +31,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <Text style={[styles.modalTitle, { color: themeColors.text }]}>
               Impostazioni
             </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={themeColors.text} />
-            </TouchableOpacity>
+            <AppButton
+              variant="icon"
+              onPress={onClose}
+              icon={<Ionicons name="close" size={24} color={Colors.primary} />}
+            />
           </View>
 
           <View style={styles.settingRow}>
